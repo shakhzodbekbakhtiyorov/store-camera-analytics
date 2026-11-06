@@ -74,6 +74,26 @@ All clips: 1920×1072, 30 fps, 5 minutes each (15 minutes in total).
 
 Other clips looked at but not used: Pexels clips by Casey Whalen (too short) and CAVIAR shop-entrance clips (384×288, very few people).
 
+## Known failure cases
+
+Timestamps are video time in each clip. "Fixed" means the config or code was changed and the case was checked again.
+
+| Clip | Time | What happens | Why | Status |
+|---|---|---|---|---|
+| counter | 00:46–00:53 | Person `#416` waiting in the queue is not counted | Hidden behind the person in front; no box, or a box cut off above the feet | Open (occlusion) |
+| counter | 01:13–01:22 | Same person, now `#559`, not counted | Same occlusion; she also got a new ID | Open (occlusion, ID switch) |
+| counter | 02:12–02:18 | One person gets three IDs: `#708`, `#746`, `#722` | ByteTrack loses the person in a crowd and starts new tracks | Open. The queue count is per frame, so it is not affected; a per-person waiting time would be |
+| counter | 02:25–02:32, 03:23–03:28 | Staff zone shows 0 while the server is there | Server is cut off by the bottom of the picture and half hidden by the table; YOLO misses her | Open. No alert (shorter than 10 s), but these seconds are counted in `empty_counter_seconds` |
+| counter | 03:40 | Staff zone shows 2 people (`#1209`) | A seated person behind the coffee urn gets a box cut off by the urn, so the foot point lands in the staff zone | Fixed: staff zone top edge moved down to y = 800 |
+| counter | whole clip | Customer being served was not counted in the queue | Legs cut off by the bottom of the picture, so the foot point sits at the very bottom edge, just below the zone | Fixed: queue zone reaches the bottom edge |
+| counter_morning | 00:00–00:13, 01:22–01:28 | Staff zone shows 0 while the server is there | Server is bent over behind the counter; YOLO misses the pose | Open. Gave a false empty-counter alert with an earlier queue zone |
+| counter_morning | whole clip | People sitting at the café tables were counted in the queue | Queue zone top edge touched the tables | Fixed: top edge moved down 60 px |
+| counter_morning | 00:45 | Staff member (pink top) walking through the queue zone is counted as a customer | No staff / customer distinction | Open |
+| entrance | whole clip | OUT 43 vs 59 in MEVA labels | Groups leave together and hide each other | Open (occlusion) |
+| entrance | first line position | People counted OUT 23 of 59 | Line too close to the door: people disappear through it before they are clearly on the other side | Fixed: line moved further from the door |
+| entrance | 00:04–00:12 (old clip) | Same person counted OUT, IN, OUT, IN | Legs hidden by others, so the box gets shorter and the foot point jumps over the line | Fixed: person must stay on the new side for `min_seconds` (0.15 s) |
+| entrance | live run, 3 cameras | `#481` counted OUT, IN, OUT within 11 s | At 3–4 fps (laptop under load) the foot point moves in big steps | Partly fixed: `min_seconds` instead of frames, so the rule means the same at any fps |
+
 ## Privacy
 
 - No face recognition and no attempt to identify anyone. The system only detects and tracks anonymous person boxes.
