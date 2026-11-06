@@ -14,9 +14,10 @@ import cv2
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.line_counter import LineCounter  # noqa: E402
 from app.tracking import PersonTracker  # noqa: E402
 
-GREEN, RED = (0, 255, 0), (0, 0, 255)
+GREEN, RED, YELLOW = (0, 255, 0), (0, 0, 255), (0, 255, 255)
 
 
 def main():
@@ -39,6 +40,7 @@ def main():
     writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
 
     tracker = PersonTracker(config["model"])
+    line_counter = LineCounter(camera["door_line"]) if "door_line" in camera else None
     max_frames = int(args.seconds * fps)
     start = time.time()
 
@@ -46,7 +48,18 @@ def main():
         ok, frame = cap.read()
         if not ok:
             break
-        for person in tracker.update(frame):
+        people = tracker.update(frame)
+
+        if line_counter:
+            for track_id, direction in line_counter.update(people):
+                seconds = frame_index / fps
+                print(f"{int(seconds // 60):02d}:{seconds % 60:04.1f}  #{track_id} {direction.upper()}")
+            a, b = (tuple(p) for p in camera["door_line"]["points"])
+            cv2.line(frame, a, b, YELLOW, 3)
+            cv2.putText(frame, f"IN {line_counter.count_in}  OUT {line_counter.count_out}",
+                        (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 2.0, YELLOW, 4)
+
+        for person in people:
             x1, y1, x2, y2 = map(int, person["box"])
             cv2.rectangle(frame, (x1, y1), (x2, y2), GREEN, 2)
             cv2.putText(frame, f"#{person['id']}", (x1, y1 - 8),
