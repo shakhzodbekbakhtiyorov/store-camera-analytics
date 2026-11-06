@@ -2,7 +2,7 @@
 # Get new coordinates with:  python tools/draw_zones.py <video> --second 30
 
 model:
-  weights: yolo11n.pt       # smallest YOLO11 model, downloaded by ultralytics on first use
+  weights: weights/yolo11n.pt  # smallest YOLO11 model, downloaded by scripts/download.sh
   device: mps               # cpu | mps (Apple GPU) | cuda:0
   imgsz: 640                # frames are resized to this before detection
   conf: 0.3                 # minimum detection confidence
