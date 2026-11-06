@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.alerts import CounterAlerts  # noqa: E402
 from app.line_counter import LineCounter  # noqa: E402
 from app.tracking import PersonTracker  # noqa: E402
-from app.zones import ZoneMonitor  # noqa: E402
+from app.zones import ZoneMonitor, is_inside  # noqa: E402
 
 GREEN, RED, YELLOW, ORANGE, CYAN = (0, 255, 0), (0, 0, 255), (0, 255, 255), (0, 140, 255), (255, 255, 0)
 
@@ -84,12 +84,24 @@ def main():
             open_alerts = [a.name for a in (alerts.queue_alert, alerts.empty_counter_alert) if a.active]
             cv2.putText(frame, f"queue {queue_now}  staff {staff_now}  alerts: {', '.join(open_alerts) or '-'}",
                         (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 1.6, ORANGE, 4)
+            # Who is in the queue zone in this frame (the per-second number is the median of these)
+            queue_ids = [f"#{p['id']}" for p in people if is_inside(zones.queue_zone, p["foot"])]
+            cv2.putText(frame, f"in queue now: {' '.join(queue_ids) or '-'}",
+                        (40, 140), cv2.FONT_HERSHEY_SIMPLEX, 1.2, ORANGE, 3)
+
+        cv2.putText(frame, mmss(video_time), (width - 260, 80), cv2.FONT_HERSHEY_SIMPLEX, 2.0, YELLOW, 4)
 
         for person in people:
+            # Orange = counted in the queue zone, cyan = in the staff zone, green = elsewhere
+            color, tag = GREEN, ""
+            if zones and is_inside(zones.queue_zone, person["foot"]):
+                color, tag = ORANGE, "Q "
+            elif zones and is_inside(zones.staff_zone, person["foot"]):
+                color, tag = CYAN, "S "
             x1, y1, x2, y2 = map(int, person["box"])
-            cv2.rectangle(frame, (x1, y1), (x2, y2), GREEN, 2)
-            cv2.putText(frame, f"#{person['id']}", (x1, y1 - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, GREEN, 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 4 if tag else 2)
+            cv2.putText(frame, f"{tag}#{person['id']}", (x1, y1 - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
             cv2.circle(frame, tuple(map(int, person["foot"])), 6, RED, -1)
         writer.write(frame)
 

@@ -5,9 +5,14 @@ import cv2
 import numpy as np
 
 
+def is_inside(polygon, point):
+    """True if the point is inside the polygon or on its edge."""
+    return cv2.pointPolygonTest(polygon, point, False) >= 0
+
+
 def count_in_zone(polygon, people):
     """How many people have their foot point inside the polygon."""
-    return sum(1 for p in people if cv2.pointPolygonTest(polygon, p["foot"], False) >= 0)
+    return sum(1 for p in people if is_inside(polygon, p["foot"]))
 
 
 class ZoneMonitor:
