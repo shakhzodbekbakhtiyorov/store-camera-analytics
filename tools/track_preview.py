@@ -14,10 +14,16 @@ import cv2
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.alerts import CounterAlerts  # noqa: E402
 from app.line_counter import LineCounter  # noqa: E402
 from app.tracking import PersonTracker  # noqa: E402
+from app.zones import ZoneMonitor  # noqa: E402
 
-GREEN, RED, YELLOW = (0, 255, 0), (0, 0, 255), (0, 255, 255)
+GREEN, RED, YELLOW, ORANGE, CYAN = (0, 255, 0), (0, 0, 255), (0, 255, 255), (0, 140, 255), (255, 255, 0)
+
+
+def mmss(seconds):
+    return f"{int(seconds // 60):02d}:{seconds % 60:04.1f}"
 
 
 def main():
@@ -41,6 +47,12 @@ def main():
 
     tracker = PersonTracker(config["model"])
     line_counter = LineCounter(camera["door_line"]) if "door_line" in camera else None
+    zones = ZoneMonitor(camera) if "queue_zone" in camera else None
+    alerts = CounterAlerts(camera["alerts"]) if zones else None
+    queue_now, staff_now = 0, 0
+    if zones:  # one line per second, to compare with hand labels later
+        seconds_file = open(os.path.join(config["output_dir"], f"{args.camera}_seconds.csv"), "w")
+        seconds_file.write("second,queue,staff\n")
     max_frames = int(args.seconds * fps)
     start = time.time()
 
@@ -49,15 +61,28 @@ def main():
         if not ok:
             break
         people = tracker.update(frame)
+        video_time = frame_index / fps
 
         if line_counter:
             for track_id, direction in line_counter.update(people):
-                seconds = frame_index / fps
-                print(f"{int(seconds // 60):02d}:{seconds % 60:04.1f}  #{track_id} {direction.upper()}")
+                print(f"{mmss(video_time)}  #{track_id} {direction.upper()}")
             a, b = (tuple(p) for p in camera["door_line"]["points"])
             cv2.line(frame, a, b, YELLOW, 3)
             cv2.putText(frame, f"IN {line_counter.count_in}  OUT {line_counter.count_out}",
                         (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 2.0, YELLOW, 4)
+
+        if zones:
+            finished = zones.update(people, video_time)
+            if finished:
+                second, queue_now, staff_now = finished
+                seconds_file.write(f"{second},{queue_now},{staff_now}\n")
+                for event in alerts.update(second, queue_now, staff_now):
+                    print(f"{mmss(second)}  {event}")
+            cv2.polylines(frame, [zones.queue_zone.astype(int)], True, ORANGE, 3)
+            cv2.polylines(frame, [zones.staff_zone.astype(int)], True, CYAN, 3)
+            open_alerts = [a.name for a in (alerts.queue_alert, alerts.empty_counter_alert) if a.active]
+            cv2.putText(frame, f"queue {queue_now}  staff {staff_now}  alerts: {', '.join(open_alerts) or '-'}",
+                        (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 1.6, ORANGE, 4)
 
         for person in people:
             x1, y1, x2, y2 = map(int, person["box"])
@@ -68,6 +93,10 @@ def main():
         writer.write(frame)
 
     elapsed = time.time() - start
+    if zones:
+        for event in alerts.finish(second=int(video_time)):
+            print(f"{mmss(video_time)}  {event}")
+        seconds_file.close()
     cap.release()
     writer.release()
     print(f"{args.camera}: {frame_index + 1} frames in {elapsed:.1f}s "
