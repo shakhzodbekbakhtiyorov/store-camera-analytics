@@ -1,0 +1,18 @@
+# Large files are downloaded by scripts/download.sh, never committed
+videos/
+door-clips/
+meva-clips/
+*.pt
+*.onnx
+*.engine
+
+# Generated results
+outputs/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

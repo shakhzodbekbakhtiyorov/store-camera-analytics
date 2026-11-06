@@ -1,0 +1,30 @@
+# One config file for the whole service. All coordinates are in original video pixels.
+# Get new coordinates with:  python tools/draw_zones.py <video> --second 30
+
+model:
+  weights: yolo11n.pt       # smallest YOLO11 model, downloaded by ultralytics on first use
+  device: mps               # cpu | mps (Apple GPU) | cuda:0
+  imgsz: 640                # frames are resized to this before detection
+  conf: 0.3                 # minimum detection confidence
+  tracker: bytetrack.yaml   # tracker config shipped with ultralytics
+
+output_dir: outputs
+reconnect_seconds: 5        # wait this long before reopening a source that failed
+
+cameras:
+  - name: entrance
+    source: videos/meva_2018-03-07.17-20-01.17-25-01.school.G420.r13.avi
+    door_line:
+      points: [[825, 682], [1384, 860]]   # the counting line, just in front of the doors
+      inside_point: [700, 1000]          # any point inside the building: moving towards it = IN
+      band_px: 20                        # dead band around the line, against jitter
+
+  - name: counter
+    source: videos/meva_2018-03-07.17-20-00.17-25-00.school.G421.r13.avi
+    queue_zone: [[405, 800], [1236, 554], [1444, 705], [722, 1054], [484, 1058]]
+    staff_zone: [[0, 560], [190, 560], [160, 1072], [0, 1072]]
+    alerts:
+      queue_min_people: 3         # (a) queue alert: at least N people ...
+      queue_min_seconds: 15       #     ... for at least T seconds
+      empty_counter_seconds: 10   # (b) nobody in the staff zone for T seconds while someone queues
+      clear_seconds: 3            # condition must be false this long before an alert ends (no flicker)
