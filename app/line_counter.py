@@ -9,8 +9,9 @@ class LineCounter:
     - Dead band: within band_px of the line a person has no side yet, so
       someone standing on the line and wobbling never flips side.
     - A side change only counts if the foot is beside the line segment (not past its ends).
-    - The new side must hold for min_frames frames, so a box that jumps for a
-      moment (e.g. legs hidden behind someone) does not count.
+    - The new side must hold for min_seconds, so a box that jumps for a
+      moment (e.g. legs hidden behind someone) does not count. Seconds, not
+      frames, so the rule means the same at 30 fps and at 5 fps.
     - The same person cannot be counted in the same direction twice in a row.
     """
 
@@ -18,12 +19,12 @@ class LineCounter:
         (self.ax, self.ay), (self.bx, self.by) = line_config["points"]
         self.length = math.hypot(self.bx - self.ax, self.by - self.ay)
         self.band = line_config["band_px"]
-        self.min_frames = line_config["min_frames"]
+        self.min_seconds = line_config["min_seconds"]
         # +1 or -1: which sign of the distance means "inside"
         self.inside_sign = 1 if self.signed_distance(line_config["inside_point"]) > 0 else -1
 
         self.side = {}            # track id -> last clear side: +1 inside, -1 outside
-        self.frames_on_new_side = {}  # track id -> frames seen on the other side so far
+        self.new_side_since = {}   # track id -> time it was first seen on the other side
         self.last_direction = {}  # track id -> "in" or "out", the last time it was counted
         self.count_in = 0
         self.count_out = 0
@@ -40,8 +41,8 @@ class LineCounter:
         t = ((px - self.ax) * (self.bx - self.ax) + (py - self.ay) * (self.by - self.ay)) / self.length ** 2
         return 0 <= t <= 1
 
-    def update(self, people):
-        """Check this frame's people; return a list of new crossings like [(7, "in")]."""
+    def update(self, people, now):
+        """Check this frame's people (now = time in seconds); return new crossings like [(7, "in")]."""
         crossings = []
         for person in people:
             foot = person["foot"]
@@ -56,14 +57,14 @@ class LineCounter:
                 self.side[track_id] = new_side  # first time we see this person
                 continue
             if new_side == old_side:
-                self.frames_on_new_side[track_id] = 0
+                self.new_side_since.pop(track_id, None)  # back on the old side: start over
                 continue
 
-            # The person must stay on the new side for a few frames before we believe it
-            self.frames_on_new_side[track_id] = self.frames_on_new_side.get(track_id, 0) + 1
-            if self.frames_on_new_side[track_id] < self.min_frames:
+            # The person must stay on the new side for min_seconds before we believe it
+            since = self.new_side_since.setdefault(track_id, now)
+            if now - since < self.min_seconds:
                 continue
-            self.frames_on_new_side[track_id] = 0
+            del self.new_side_since[track_id]
             self.side[track_id] = new_side
 
             direction = "in" if new_side == 1 else "out"

@@ -95,7 +95,7 @@ class CameraWorker(threading.Thread):
 
     def process_frame(self, frame, now):
         people = self.tracker.update(frame)
-        crossings = self.line_counter.update(people) if self.line_counter else []
+        crossings = self.line_counter.update(people, now) if self.line_counter else []
         for track_id, direction in crossings:
             log.info("%s: #%s %s", self.name, track_id, direction.upper())
 

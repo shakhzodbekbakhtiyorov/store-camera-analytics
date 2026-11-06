@@ -65,7 +65,7 @@ def main():
         video_time = frame_index / fps
 
         if line_counter:
-            for track_id, direction in line_counter.update(people):
+            for track_id, direction in line_counter.update(people, video_time):
                 print(f"{mmss(video_time)}  #{track_id} {direction.upper()}")
             a, b = (tuple(p) for p in camera["door_line"]["points"])
             cv2.line(frame, a, b, YELLOW, 3)

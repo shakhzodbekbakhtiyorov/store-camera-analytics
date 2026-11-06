@@ -9,13 +9,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.line_counter import LineCounter  # noqa: E402
 
 # A horizontal line from x=0 to x=100 at y=50. Inside is below it (bigger y).
-LINE = {"points": [[0, 50], [100, 50]], "inside_point": [50, 100], "band_px": 10, "min_frames": 1}
+LINE = {"points": [[0, 50], [100, 50]], "inside_point": [50, 100], "band_px": 10, "min_seconds": 0}
 
 
-def walk(counter, track_id, positions):
-    """Feed one person's foot positions frame by frame."""
-    for foot in positions:
-        counter.update([{"id": track_id, "foot": foot}])
+FPS = 10
+
+
+def walk(counter, track_id, positions, start_frame=0):
+    """Feed one person's foot positions frame by frame, at FPS frames per second."""
+    for i, foot in enumerate(positions, start=start_frame):
+        counter.update([{"id": track_id, "foot": foot}], now=i / FPS)
 
 
 def test_walk_in():
@@ -64,15 +67,23 @@ def test_same_direction_not_counted_twice():
 
 
 def test_short_jump_across_line_ignored():
-    counter = LineCounter({**LINE, "min_frames": 3})
-    # Box bottom jumps inside for 2 frames (legs hidden), then back outside
+    counter = LineCounter({**LINE, "min_seconds": 0.2})
+    # Box bottom jumps inside for 2 frames = 0.1 s (legs hidden), then back outside
     walk(counter, 1, [(50, 20), (50, 80), (50, 80), (50, 20), (50, 20)])
     assert (counter.count_in, counter.count_out) == (0, 0)
 
 
-def test_real_crossing_with_min_frames():
-    counter = LineCounter({**LINE, "min_frames": 3})
-    walk(counter, 1, [(50, 20), (50, 80), (50, 85), (50, 90)])
+def test_real_crossing_with_min_seconds():
+    counter = LineCounter({**LINE, "min_seconds": 0.2})
+    walk(counter, 1, [(50, 20), (50, 80), (50, 85), (50, 90), (50, 95)])  # inside from 0.1 s to 0.4 s
+    assert (counter.count_in, counter.count_out) == (1, 0)
+
+
+def test_min_seconds_same_at_low_fps():
+    # At 2 fps a single frame on the other side already lasts 0.5 s: the rule is about time, not frames
+    counter = LineCounter({**LINE, "min_seconds": 0.4})
+    for i, foot in enumerate([(50, 20), (50, 80), (50, 80)]):
+        counter.update([{"id": 1, "foot": foot}], now=i / 2)
     assert (counter.count_in, counter.count_out) == (1, 0)
 
 

@@ -18,7 +18,7 @@ cameras:
       points: [[822, 690], [1378, 872]]   # the counting line, a little in front of the doors
       inside_point: [700, 1000]          # any point inside the building: moving towards it = IN
       band_px: 20                        # dead band around the line, against jitter
-      min_frames: 5                      # new side must hold this many frames (1/6 s at 30 fps)
+      min_seconds: 0.15                  # new side must hold this long before we count
 
   - name: counter
     source: videos/meva_2018-03-07.17-20-00.17-25-00.school.G421.r13.avi
