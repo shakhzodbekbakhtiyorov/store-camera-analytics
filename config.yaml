@@ -22,10 +22,20 @@ cameras:
 
   - name: counter
     source: videos/meva_2018-03-07.17-20-00.17-25-00.school.G421.r13.avi
-    queue_zone: [[405, 800], [1236, 554], [1444, 705], [722, 1054], [484, 1058]]
+    queue_zone: [[375, 918], [428, 812], [753, 720], [1263, 520], [1581, 698], [1346, 855], [880, 1066], [406, 1059]]
     staff_zone: [[0, 560], [190, 560], [160, 1072], [0, 1072]]
     alerts:
       queue_min_people: 3         # (a) queue alert: at least N people ...
       queue_min_seconds: 15       #     ... for at least T seconds
       empty_counter_seconds: 10   # (b) nobody in the staff zone for T seconds while someone queues
       clear_seconds: 3            # condition must be false this long before an alert ends (no flicker)
+
+  - name: counter_morning   # same camera, zoomed out; the server leaves the counter at times
+    source: videos/meva_2018-03-07.11-10-01.11-15-01.school.G421.r13.avi
+    queue_zone: [[474, 879], [506, 807], [1258, 588], [1598, 692], [1370, 832], [918, 1062], [525, 1058]]
+    staff_zone: [[0, 700], [230, 660], [400, 1072], [0, 1072]]
+    alerts:
+      queue_min_people: 3
+      queue_min_seconds: 15
+      empty_counter_seconds: 10
+      clear_seconds: 3

@@ -23,7 +23,8 @@ GREEN, RED, YELLOW, ORANGE, CYAN = (0, 255, 0), (0, 0, 255), (0, 255, 255), (0, 
 
 
 def mmss(seconds):
-    return f"{int(seconds // 60):02d}:{seconds % 60:04.1f}"
+    tenths = round(seconds * 10)  # round first, so 299.99 s shows as 05:00.0, not 04:60.0
+    return f"{tenths // 600:02d}:{tenths % 600 / 10:04.1f}"
 
 
 def main():
