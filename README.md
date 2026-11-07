@@ -4,6 +4,12 @@ Store analytics case study (ML Engineer, computer vision): person detection and 
 
 All footage is public and licensed for download, processing and display. No private or company footage is used.
 
+| Counter: queue zone (orange), staff zone (cyan), queue alert starts at 00:25 | Entrance: door line (yellow), two people counted OUT |
+|---|---|
+| ![counter](docs/counter.gif) | ![entrance](docs/entrance.gif) |
+
+Heads are blurred (see [Privacy](#privacy)). Made with `tools/track_preview.py <camera> --blur`, then cut to 10 s with ffmpeg.
+
 ## Quick start
 
 Requirements: Python 3.11, `make`, `curl`. Tested on macOS (Apple M1).
@@ -52,7 +58,7 @@ config.yaml ──► app/main.py starts one thread per camera (app/camera.py)
 |---|---|
 | `tools/draw_zones.py <video> --second 30` | click points on a frame to get coordinates for the config |
 | `tools/show_config.py` | draw the configured line and zones on a frame of each camera |
-| `tools/track_preview.py <camera> --seconds 300` | offline run of one camera: video with boxes and IDs, crossings and alerts printed; crossings and per-second zone values saved as CSV |
+| `tools/track_preview.py <camera> --seconds 300` | offline run of one camera: video with boxes and IDs, crossings and alerts printed; crossings and per-second zone values saved as CSV. Add `--blur` to blur heads before publishing |
 
 ## Video sources and licences
 
@@ -78,7 +84,7 @@ Other clips looked at but not used: Pexels clips by Casey Whalen (too short) and
 
 ### Door IN/OUT (entrance clip)
 
-Reference: MEVA's own activity labels for this clip (`person_enters_scene_through_structure` / `person_exits_scene_through_structure`), saved in `labels/meva_reference_entrance.csv`. System crossings come from `tools/track_preview.py entrance --seconds 300` (30 fps, every frame).
+Reference: MEVA's own activity labels for this clip (`person_enters_scene_through_structure` / `person_exits_scene_through_structure`), saved in `labels/meva_reference_entrance.csv`. These are human annotations made by the dataset authors, one per person going through the doors, with a start and end time. I used them as the hand count instead of counting again myself: they are made independently of my system, and the timestamps let me check each crossing one by one, not only the totals. System crossings come from `tools/track_preview.py entrance --seconds 300` (30 fps, every frame).
 
 ```bash
 python tools/evaluate_door.py labels/meva_reference_entrance.csv outputs/entrance_crossings.csv
@@ -86,10 +92,10 @@ python tools/evaluate_door.py labels/meva_reference_entrance.csv outputs/entranc
 
 A label counts as **found** if the system has a crossing in the same direction within the labelled time ±2 s. A system crossing that matches no label is **false**.
 
-| Direction | MEVA labels | System | Found | Missed | False |
-|---|---|---|---|---|---|
-| IN | 13 | 15 | 13 | 0 | 2 (01:50.7, 03:34.2) |
-| OUT | 59 | 44 | 43 | 16 | 1 (01:45.2) |
+| Direction | MEVA labels (hand count) | System | Error (system − labels) | Found | Missed | False |
+|---|---|---|---|---|---|---|
+| IN | 13 | 15 | +2 (+15%) | 13 | 0 | 2 (01:50.7, 03:34.2) |
+| OUT | 59 | 44 | −15 (−25%) | 43 | 16 | 1 (01:45.2) |
 
 - IN is complete; OUT finds 43 of 59 (73%), and almost every OUT the system reports is real (43 of 44).
 - The misses come in groups: 00:48–00:49, 01:01–01:04 and 01:16–01:21. These are groups of people leaving together and hiding each other, so the tracker loses some of them before the line.
@@ -139,6 +145,8 @@ Limits: these clips have no real empty-counter alert, so this alert is tested on
 
 **Hardware:** MacBook Air M1 (2020, 8-core CPU, 7-core GPU, fanless), on AC power. **Model:** YOLO11n (`yolo11n.pt`, 5.6 MB, 2.6 M parameters), PyTorch on the Apple GPU (`device: mps`), FP32. **Input:** 1920×1072 video at 30 fps, resized by YOLO to 640 px on the long side. Tracker: ByteTrack.
 
+**GPU memory** (`torch.mps.driver_allocated_memory()`, peak over 150 frames per camera): 59 MB with 1 camera, 75 MB with 3 cameras (each camera has its own model copy). The M1 has unified memory, so this is shared with the CPU; memory is not a limit here.
+
 | Run | Streams | FPS per stream | Total FPS |
 |---|---|---|---|
 | 1 camera, as fast as possible (`tools/track_preview.py`, 60 s of video, includes drawing and writing the output video) | 1 | 35.5 (entrance), 31.5 (counter, more people) | 31–36 |
@@ -184,6 +192,8 @@ This is a plan, not something built or measured here.
 
 **4. A GPU server.** An NVIDIA GPU with the model exported to TensorRT in FP16. Ultralytics reports about 1.5 ms per image for YOLO11n on an NVIDIA T4 with TensorRT FP16 (over 600 frames per second, before batching). So one T4-class GPU should carry 50 cameras at 5–10 fps, and a second server gives headroom and failover. Decoding also moves to the GPU's video decoder (NVDEC), so the CPU is not the bottleneck.
 
+**What breaks first.** Video decoding, not the model. H.264 cannot skip frames: to get 5 frames per second from a 30 fps camera, all 30 must still be decoded (the service does this today with `cap.grab()`). 50 cameras × 30 fps of 1080p is 1,500 decoded frames per second, which is too much for the CPU and close to the limit of one GPU's NVDEC. Fixes, in order: use the low-resolution substream, set the cameras themselves to send 10 fps, then decode on the GPU. Next to break: the Python process itself (50 threads doing tracking and zone checks share one GIL), so the cameras would be split over a few worker processes. GPU memory is not the issue: YOLO11n needs about 20–60 MB per copy (see Speed).
+
 **5. Outputs and monitoring.** 50 CSV files and one JSON file do not scale for people to read. Minute rows and alerts go to one database (for example PostgreSQL), and alerts are also sent to a message channel. A dashboard shows each camera's status (connected, FPS, last frame time), so a dead camera is noticed in minutes. The reconnect loop that exists today stays.
 
 **6. Per-camera setup.** Each new camera needs its line and zones drawn once (`tools/draw_zones.py`) and checked with `tools/show_config.py`. With 50 cameras this is the slowest part of a rollout. A small web page for drawing zones would help.
@@ -191,4 +201,6 @@ This is a plan, not something built or measured here.
 ## Privacy
 
 - No face recognition and no attempt to identify anyone. The system only detects and tracks anonymous person boxes.
-- Faces are blurred in every published output frame, GIF or video.
+- The service itself writes no images or video, only numbers (CSV) and alert events (JSON).
+- The GIFs in this README are the only published frames. They were made with `tools/track_preview.py --blur`, which blurs the top third of every tracked person box (the head) before the boxes are drawn, and then shrunk to 560 px wide.
+- Limit: a person the detector misses gets no box, so no blur. I checked the GIFs by eye; the people without a box are small and far away and cannot be recognised at this size.

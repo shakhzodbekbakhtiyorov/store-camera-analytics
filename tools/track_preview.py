@@ -1,9 +1,10 @@
 """Run detection + tracking on one camera and save a video with boxes and IDs.
 
 Usage:
-    python tools/track_preview.py entrance [--seconds 60]
+    python tools/track_preview.py entrance [--seconds 60] [--blur]
 
 Saves outputs/track_<camera>.mp4 and prints the processing speed (FPS).
+--blur blurs the head of every tracked person, for videos or GIFs you publish.
 """
 import argparse
 import os
@@ -27,11 +28,22 @@ def mmss(seconds):
     return f"{tenths // 600:02d}:{tenths % 600 / 10:04.1f}"
 
 
+def blur_heads(frame, people):
+    """Blur the top third of every person box (where the head is), so nobody can be recognised."""
+    for person in people:
+        x1, y1, x2, y2 = map(int, person["box"])
+        x1, y1 = max(x1, 0), max(y1, 0)
+        head_bottom = y1 + max((y2 - y1) // 3, 1)
+        if x2 > x1 and head_bottom > y1:
+            frame[y1:head_bottom, x1:x2] = cv2.GaussianBlur(frame[y1:head_bottom, x1:x2], (51, 51), 0)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("camera", help="camera name from config.yaml")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--seconds", type=float, default=60)
+    parser.add_argument("--blur", action="store_true", help="blur heads in the saved video")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -66,6 +78,8 @@ def main():
             break
         people = tracker.update(frame)
         video_time = frame_index / fps
+        if args.blur:
+            blur_heads(frame, people)  # before drawing, so the labels stay sharp
 
         if line_counter:
             for track_id, direction in line_counter.update(people, video_time):
