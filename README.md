@@ -52,7 +52,7 @@ config.yaml ──► app/main.py starts one thread per camera (app/camera.py)
 |---|---|
 | `tools/draw_zones.py <video> --second 30` | click points on a frame to get coordinates for the config |
 | `tools/show_config.py` | draw the configured line and zones on a frame of each camera |
-| `tools/track_preview.py <camera> --seconds 300` | offline run of one camera: video with boxes and IDs, crossings and alerts printed, per-second zone values saved |
+| `tools/track_preview.py <camera> --seconds 300` | offline run of one camera: video with boxes and IDs, crossings and alerts printed; crossings and per-second zone values saved as CSV |
 
 ## Video sources and licences
 
@@ -75,6 +75,26 @@ All clips: 1920×1072, 30 fps, 5 minutes each (15 minutes in total).
 Other clips looked at but not used: Pexels clips by Casey Whalen (too short) and CAVIAR shop-entrance clips (384×288, very few people).
 
 ## Measurements
+
+### Door IN/OUT (entrance clip)
+
+Reference: MEVA's own activity labels for this clip (`person_enters_scene_through_structure` / `person_exits_scene_through_structure`), saved in `labels/meva_reference_entrance.csv`. System crossings come from `tools/track_preview.py entrance --seconds 300` (30 fps, every frame).
+
+```bash
+python tools/evaluate_door.py labels/meva_reference_entrance.csv outputs/entrance_crossings.csv
+```
+
+A label counts as **found** if the system has a crossing in the same direction within the labelled time ±2 s. A system crossing that matches no label is **false**.
+
+| Direction | MEVA labels | System | Found | Missed | False |
+|---|---|---|---|---|---|
+| IN | 13 | 15 | 13 | 0 | 2 (01:50.7, 03:34.2) |
+| OUT | 59 | 44 | 43 | 16 | 1 (01:45.2) |
+
+- IN is complete; OUT finds 43 of 59 (73%), and almost every OUT the system reports is real (43 of 44).
+- The misses come in groups: 00:48–00:49, 01:01–01:04 and 01:16–01:21. These are groups of people leaving together and hiding each other, so the tracker loses some of them before the line.
+- At 03:33–03:34 `#920` is counted OUT and then IN 1.1 s later: the foot point jumps back over the line in a group. That gives one false IN, and the second person leaving at 03:34.5 is missed.
+- At lower frame rates the totals barely change: 14 IN / 42 OUT at 10 fps, 13 / 39 at 5 fps.
 
 ### Queue length (counter clip)
 
@@ -144,8 +164,9 @@ Timestamps are video time in each clip. "Fixed" means the config or code was cha
 | counter_morning | 00:00–00:13, 01:22–01:28 | Staff zone shows 0 while the server is there | Server is bent over behind the counter; YOLO misses the pose | Open. Gave a false empty-counter alert with an earlier queue zone |
 | counter_morning | whole clip | People sitting at the café tables were counted in the queue | Queue zone top edge touched the tables | Fixed: top edge moved down 60 px |
 | counter_morning | 00:45 | Staff member (pink top) walking through the queue zone is counted as a customer | No staff / customer distinction | Open |
-| entrance | whole clip | OUT 43 vs 59 in MEVA labels | Groups leave together and hide each other | Open (occlusion) |
+| entrance | 00:48–00:49, 01:01–01:04, 01:16–01:21 | 16 of 59 OUT missed (most in these groups) | Groups leave together and hide each other | Open (occlusion) |
 | entrance | first line position | People counted OUT 23 of 59 | Line too close to the door: people disappear through it before they are clearly on the other side | Fixed: line moved further from the door |
+| entrance | 03:33–03:34 | `#920` counted OUT, then IN 1.1 s later | Foot point jumps back over the line in a group; 1.1 s is longer than `min_seconds` | Open |
 | entrance | 00:04–00:12 (old clip) | Same person counted OUT, IN, OUT, IN | Legs hidden by others, so the box gets shorter and the foot point jumps over the line | Fixed: person must stay on the new side for `min_seconds` (0.15 s) |
 | entrance | live run, 3 cameras | `#481` counted OUT, IN, OUT within 11 s | At 3–4 fps (laptop under load) the foot point moves in big steps | Partly fixed: `min_seconds` instead of frames, so the rule means the same at any fps |
 

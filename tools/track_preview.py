@@ -51,6 +51,9 @@ def main():
     zones = ZoneMonitor(camera) if "queue_zone" in camera else None
     alerts = CounterAlerts(camera["alerts"]) if zones else None
     queue_now, staff_now = 0, 0
+    if line_counter:  # one line per crossing, to compare with reference labels later
+        crossings_file = open(os.path.join(config["output_dir"], f"{args.camera}_crossings.csv"), "w")
+        crossings_file.write("second,id,direction\n")
     if zones:  # one line per second, to compare with hand labels later
         seconds_file = open(os.path.join(config["output_dir"], f"{args.camera}_seconds.csv"), "w")
         seconds_file.write("second,queue,staff\n")
@@ -67,6 +70,7 @@ def main():
         if line_counter:
             for track_id, direction in line_counter.update(people, video_time):
                 print(f"{mmss(video_time)}  #{track_id} {direction.upper()}")
+                crossings_file.write(f"{video_time:.2f},{track_id},{direction}\n")
             a, b = (tuple(p) for p in camera["door_line"]["points"])
             cv2.line(frame, a, b, YELLOW, 3)
             cv2.putText(frame, f"IN {line_counter.count_in}  OUT {line_counter.count_out}",
@@ -106,6 +110,8 @@ def main():
         writer.write(frame)
 
     elapsed = time.time() - start
+    if line_counter:
+        crossings_file.close()
     if zones:
         for event in alerts.finish(second=int(video_time)):
             print(f"{mmss(video_time)}  {event}")
