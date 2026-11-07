@@ -149,6 +149,24 @@ Timestamps are video time in each clip. "Fixed" means the config or code was cha
 | entrance | 00:04–00:12 (old clip) | Same person counted OUT, IN, OUT, IN | Legs hidden by others, so the box gets shorter and the foot point jumps over the line | Fixed: person must stay on the new side for `min_seconds` (0.15 s) |
 | entrance | live run, 3 cameras | `#481` counted OUT, IN, OUT within 11 s | At 3–4 fps (laptop under load) the foot point moves in big steps | Partly fixed: `min_seconds` instead of frames, so the rule means the same at any fps |
 
+## Scaling to 50 cameras
+
+This is a plan, not something built or measured here.
+
+**The load.** The M1 laptop handles about 38 frames per second in total. 50 cameras at full 30 fps would need 1,500. That is about 40 times more, so the setup has to change.
+
+**1. Fewer frames per camera.** Counting people does not need 30 fps. On the entrance clip the door count is almost the same at 10 fps (14 IN / 42 OUT) and 5 fps (13 / 39) as at 30 fps (15 / 44). With 5–10 fps per camera, 50 cameras need 250–500 frames per second.
+
+**2. Smaller frames.** IP cameras usually send a second, low-resolution stream (for example 640×360). YOLO resizes every frame to 640 px anyway, so decoding 1080p is wasted work. Using that stream makes decoding several times cheaper.
+
+**3. One model for many cameras.** Today every camera loads its own copy of the model and sends one frame at a time. Instead: camera threads only read and decode frames, and put them in a queue. One inference worker takes a batch (for example one frame from each of 16 cameras) and runs the model on all of them at once. A GPU is much more efficient on batches. Tracking, line counting, zones and alerts stay per camera, as they are now, so the logic in `app/` does not change.
+
+**4. A GPU server.** An NVIDIA GPU with the model exported to TensorRT in FP16. Ultralytics reports about 1.5 ms per image for YOLO11n on an NVIDIA T4 with TensorRT FP16 (over 600 frames per second, before batching). So one T4-class GPU should carry 50 cameras at 5–10 fps, and a second server gives headroom and failover. Decoding also moves to the GPU's video decoder (NVDEC), so the CPU is not the bottleneck.
+
+**5. Outputs and monitoring.** 50 CSV files and one JSON file do not scale for people to read. Minute rows and alerts go to one database (for example PostgreSQL), and alerts are also sent to a message channel. A dashboard shows each camera's status (connected, FPS, last frame time), so a dead camera is noticed in minutes. The reconnect loop that exists today stays.
+
+**6. Per-camera setup.** Each new camera needs its line and zones drawn once (`tools/draw_zones.py`) and checked with `tools/show_config.py`. With 50 cameras this is the slowest part of a rollout. A small web page for drawing zones would help.
+
 ## Privacy
 
 - No face recognition and no attempt to identify anyone. The system only detects and tracks anonymous person boxes.
