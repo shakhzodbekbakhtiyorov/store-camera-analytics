@@ -98,6 +98,23 @@ Where the 8 errors come from:
 
 The 05:00 label is left out: it is the last frame of the clip, and the system has no complete second there.
 
+People walking through the queue zone are counted as errors: the queue means people **waiting**, and the hand labels count only them. A possible fix is a minimum time in the zone (for example 3 s) before a person counts; it is not implemented.
+
+### Alerts
+
+Expected alerts come from the hand labels above (queue alert: 3 or more people for 15 s or more) and from watching the staff zone in the videos (empty-counter alert: no server for 10 s while someone waits).
+
+| Clip | Alert | Expected | Found by the system | Missed | False |
+|---|---|---|---|---|---|
+| counter | queue | 2: about 00:20–02:40 and 03:00–04:00 | 2: 00:11–02:48 (peak 7), 02:52–04:16 (peak 4) | 0 | 0 |
+| counter | empty counter | 0 (server always there) | 0 | 0 | 0 |
+| counter_morning | queue | 0 (3 or more people for about 12 s only) | 0 | 0 | 0 |
+| counter_morning | empty counter | 0 (server away 8 s at most) | 0 | 0 | 0 |
+
+Start and end times differ from the labels by up to ~10 s, because the labels are only every 10 s.
+
+Limits: these clips have no real empty-counter alert, so this alert is tested only by the unit tests (`tests/test_zones_alerts.py`). With an earlier queue zone, `counter_morning` gave one false empty-counter alert (server bent over and missed by YOLO, see failure cases).
+
 ## Known failure cases
 
 Timestamps are video time in each clip. "Fixed" means the config or code was changed and the case was checked again.
