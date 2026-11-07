@@ -1,0 +1,30 @@
+second,queue,note
+10,2,
+20,3,one more person passing by (could be read as 4)
+30,6,
+40,6,one person leaving the area
+50,6,one person hidden behind another
+60,5,
+70,5,
+80,5,one person hidden behind another
+90,5,
+100,5,
+110,5,
+120,5,
+130,4,one person tracked with three IDs
+140,4,one person leaving
+150,3,
+160,3,
+170,2,
+180,4,
+190,4,
+200,3,one more person crossing the area (could be read as 4)
+210,3,
+220,4,
+230,3,
+240,3,
+250,2,
+260,2,
+270,2,
+280,2,one more person crossing the area
+290,1,

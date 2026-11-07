@@ -74,6 +74,30 @@ All clips: 1920×1072, 30 fps, 5 minutes each (15 minutes in total).
 
 Other clips looked at but not used: Pexels clips by Casey Whalen (too short) and CAVIAR shop-entrance clips (384×288, very few people).
 
+## Measurements
+
+### Queue length (counter clip)
+
+I paused `outputs/track_counter.mp4` every 10 s and counted the people waiting by hand, from 00:10 to 04:50 (29 labels, in `labels/counter_queue_hand.csv`). The system value is the per-second queue from `tools/track_preview.py counter --seconds 300`.
+
+```bash
+python tools/evaluate_queue.py labels/counter_queue_hand.csv outputs/counter_seconds.csv
+```
+
+| Labels | MAE | Exact | Max error |
+|---|---|---|---|
+| 29 (every 10 s, 00:10–04:50) | **0.31 people** | 21 / 29 | 2 |
+
+Where the 8 errors come from:
+
+| Time | Hand | System | Cause |
+|---|---|---|---|
+| 00:50, 01:20, 01:30, 01:40 | 6, 5, 5, 5 | 5, 4, 4, 4 | One person hidden behind another (occlusion) |
+| 02:10 | 4 | 6 | One person detected as three overlapping boxes |
+| 00:20, 03:20, 04:40 | 3, 3, 2 | 4, 4, 3 | Someone walking through the queue zone, not waiting |
+
+The 05:00 label is left out: it is the last frame of the clip, and the system has no complete second there.
+
 ## Known failure cases
 
 Timestamps are video time in each clip. "Fixed" means the config or code was changed and the case was checked again.
@@ -82,7 +106,7 @@ Timestamps are video time in each clip. "Fixed" means the config or code was cha
 |---|---|---|---|---|
 | counter | 00:46–00:53 | Person `#416` waiting in the queue is not counted | Hidden behind the person in front; no box, or a box cut off above the feet | Open (occlusion) |
 | counter | 01:13–01:22 | Same person, now `#559`, not counted | Same occlusion; she also got a new ID | Open (occlusion, ID switch) |
-| counter | 02:12–02:18 | One person gets three IDs: `#708`, `#746`, `#722` | ByteTrack loses the person in a crowd and starts new tracks | Open. The queue count is per frame, so it is not affected; a per-person waiting time would be |
+| counter | 02:10–02:18 | One person gets three boxes at the same time: `#708` (whole body), `#720` (upper body), `#722` (legs); later also `#746` | YOLO detects body parts as extra people; the boxes overlap too little to be merged | Open. Queue shows 6 instead of 4 at 02:10 (see queue accuracy) |
 | counter | 02:25–02:32, 03:23–03:28 | Staff zone shows 0 while the server is there | Server is cut off by the bottom of the picture and half hidden by the table; YOLO misses her | Open. No alert (shorter than 10 s), but these seconds are counted in `empty_counter_seconds` |
 | counter | 03:40 | Staff zone shows 2 people (`#1209`) | A seated person behind the coffee urn gets a box cut off by the urn, so the foot point lands in the staff zone | Fixed: staff zone top edge moved down to y = 800 |
 | counter | whole clip | Customer being served was not counted in the queue | Legs cut off by the bottom of the picture, so the foot point sits at the very bottom edge, just below the zone | Fixed: queue zone reaches the bottom edge |
