@@ -115,6 +115,20 @@ Start and end times differ from the labels by up to ~10 s, because the labels ar
 
 Limits: these clips have no real empty-counter alert, so this alert is tested only by the unit tests (`tests/test_zones_alerts.py`). With an earlier queue zone, `counter_morning` gave one false empty-counter alert (server bent over and missed by YOLO, see failure cases).
 
+### Speed
+
+**Hardware:** MacBook Air M1 (2020, 8-core CPU, 7-core GPU, fanless), on AC power. **Model:** YOLO11n (`yolo11n.pt`, 5.6 MB, 2.6 M parameters), PyTorch on the Apple GPU (`device: mps`), FP32. **Input:** 1920×1072 video at 30 fps, resized by YOLO to 640 px on the long side. Tracker: ByteTrack.
+
+| Run | Streams | FPS per stream | Total FPS |
+|---|---|---|---|
+| 1 camera, as fast as possible (`tools/track_preview.py`, 60 s of video, includes drawing and writing the output video) | 1 | 35.5 (entrance), 31.5 (counter, more people) | 31–36 |
+| Live service, all 3 cameras at once (`python -m app.main --duration 120`, steady state after warm-up) | 3 | 12.4–13.3 | 37–40 |
+
+- One camera keeps up with a 30 fps source in real time.
+- With 3 cameras the total stays about the same (~38 FPS): the cameras share one GPU and the CPU decodes three 1080p videos. Each camera then processes ~13 of its 30 frames per second and skips the rest (as a live stream would).
+- Door counting still works at this rate: on the entrance clip, 10 fps gives 14 IN / 42 OUT vs 15 / 44 at 30 fps.
+- On long runs the fanless M1 gets hot and slows down; in an earlier 40-minute run the speed fell to 3–4 FPS per camera.
+
 ## Known failure cases
 
 Timestamps are video time in each clip. "Fixed" means the config or code was changed and the case was checked again.
